@@ -1,0 +1,236 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>GenAI ROI calculator</title>
+<style>
+:root{--ink:#111827;--muted:#6b7280;--line:#e5e7eb;--bg:#f8fafc;--card:#fff;--accent:#2563eb;--good:#059669;--bad:#dc2626}
+*{box-sizing:border-box}
+body{margin:0;font:14px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif;color:var(--ink);background:var(--bg)}
+header{padding:18px 24px 10px;border-bottom:1px solid var(--line);background:var(--card)}
+header h1{margin:0;font-size:20px}header p{margin:4px 0 0;color:var(--muted);font-size:13px}
+.wrap{display:grid;grid-template-columns:minmax(360px,460px) 1fr;gap:18px;padding:18px 24px;max-width:1500px;margin:0 auto}
+@media (max-width:980px){.wrap{grid-template-columns:1fr}}
+section{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px 14px 10px;margin-bottom:14px}
+section h2{font-size:14px;margin:0 0 10px;display:flex;justify-content:space-between;align-items:center}
+label{display:grid;grid-template-columns:1fr 130px;gap:8px;align-items:center;margin:5px 0;font-size:13px}
+label span{color:#374151}
+input,select{font:inherit;padding:5px 7px;border:1px solid #d1d5db;border-radius:6px;width:100%;background:#fff}
+input:focus,select:focus{outline:2px solid #bfdbfe;border-color:var(--accent)}
+.row{display:grid;gap:6px;align-items:end}
+.call{border:1px dashed var(--line);border-radius:8px;padding:8px;margin:8px 0;background:#fcfcfd}
+.call .grid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+.call small,.tiny{color:var(--muted);font-size:11.5px}
+.opt{border:1px solid var(--line);border-radius:8px;padding:10px;margin:10px 0}
+.opt-h{display:flex;gap:8px;align-items:center}
+button{font:inherit;padding:6px 10px;border-radius:6px;border:1px solid #cbd5e1;background:#fff;cursor:pointer}
+button:hover{background:#f1f5f9}button.primary{background:var(--accent);color:#fff;border-color:var(--accent)}
+button.link{border:0;background:none;color:var(--accent);padding:2px 4px}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;margin-bottom:14px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px}
+.card .k{color:var(--muted);font-size:12px}.card .v{font-size:21px;font-weight:650;margin-top:2px}
+table{border-collapse:collapse;width:100%;font-size:13px}
+th,td{padding:7px 8px;border-bottom:1px solid #f1f5f9;text-align:right}th:first-child,td:first-child{text-align:left}
+th{background:#f8fafc;font-weight:600;color:#374151}tr.best td{background:#ecfdf5}
+.legend span{display:inline-flex;align-items:center;margin-right:14px;font-size:12px;color:#374151}
+.legend i{width:12px;height:3px;margin-right:6px;display:inline-block}
+.err{color:var(--bad);font-size:13px;margin:6px 0}
+.note{font-size:12px;color:var(--muted)}
+.toolbar{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+</style>
+</head>
+<body>
+<header>
+  <h1>GenAI ROI calculator</h1>
+  <p>Business case for an AI agent or workflow: today's cost, AI cost per task (Amazon Bedrock and the OpenAI API), adoption, build and run costs. Prices as of <b id="asof"></b>; check any marked rates before quoting. Same engine as the <code>roi</code> CLI and the Excel workbook.</p>
+  <div class="toolbar">
+    <select id="example"></select><button id="loadEx">Load example</button>
+    <button id="dl">Download scenario (JSON)</button>
+    <label style="display:inline-flex;grid-template-columns:none;margin:0"><input type="file" id="file" accept=".json" style="width:auto"></label>
+  </div>
+</header>
+<div class="wrap">
+  <div id="form"></div>
+  <div>
+    <div id="error" class="err"></div>
+    <div class="cards" id="cards"></div>
+    <section><h2>Options compared</h2><div id="table"></div></section>
+    <section><h2>Cumulative cash flow by month</h2><div id="chart"></div><div class="legend" id="legend"></div></section>
+    <section><h2 id="tornadoTitle">Sensitivity</h2><div id="tornado"></div></section>
+    <section><h2>Prices used</h2><div id="prices"></div></section>
+  </div>
+</div>
+<script>/*__CALC__*/</script>
+<script>
+const CATALOG = /*__CATALOG__*/{};
+const EXAMPLES = /*__EXAMPLES__*/{};
+const PALETTE = ["#2563EB","#D97706","#059669","#7C3AED","#DC2626","#0891B2"];
+let S = null;
+
+const $ = (id) => document.getElementById(id);
+const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+function fmt(v){ if(v==null||!isFinite(v)) return "n/a"; const cur=S.currency; const a=Math.abs(v);
+  if(cur==="INR"&&a>=1e7) return cur+" "+(v/1e7).toLocaleString(undefined,{maximumFractionDigits:2})+" cr";
+  if(a>=1e6) return cur+" "+(v/1e6).toLocaleString(undefined,{maximumFractionDigits:2})+"M";
+  return cur+" "+v.toLocaleString(undefined,{maximumFractionDigits:a>=100?0:2}); }
+const pct = (v) => v==null||!isFinite(v) ? "n/a" : (v*100).toFixed(1)+"%";
+const month = (v) => v==null ? "not within horizon" : (v===0 ? "immediately" : "month "+v);
+
+function modelOptions(sel){
+  let h="";
+  for (const [pid,cat] of Object.entries(CATALOG)) {
+    h += `<optgroup label="${esc(cat.label||pid)}">`;
+    for (const [mid,m] of Object.entries(cat.models)) {
+      const v = pid+"|"+mid;
+      h += `<option value="${esc(v)}" ${v===sel?"selected":""}>${esc(m.label||mid)}${m.verify?" (check)":""}</option>`;
+    }
+    h += "</optgroup>";
+  }
+  return h;
+}
+function sel(list, cur){ return list.map(x=>`<option ${x===cur?"selected":""}>${esc(x)}</option>`).join(""); }
+
+function field(path, label, step){ const v = get(path); return `<label><span>${esc(label)}</span><input data-p="${path}" type="number" step="${step||"any"}" value="${v??""}"></label>`; }
+function get(path){ return path.split(".").reduce((o,k)=>o==null?o:o[k], S); }
+function set(path, v){ const ks=path.split("."); let o=S; for(let i=0;i<ks.length-1;i++){ if(o[ks[i]]==null) o[ks[i]]={}; o=o[ks[i]]; } o[ks[ks.length-1]]=v; }
+
+function renderForm(){
+  const s=S; let h="";
+  h += `<section><h2>Scenario</h2>
+    <label><span>Name</span><input data-p="name" data-t="text" value="${esc(s.name||"")}"></label>
+    <label><span>Currency</span><input data-p="currency" data-t="text" value="${esc(s.currency)}"></label>
+    ${s.currency!=="USD"?field("fx_usd","1 USD in "+s.currency+" (set your rate)"):""}
+    <label><span>Start date</span><input data-p="start_date" data-t="text" value="${esc(s.start_date)}"></label>
+    ${field("horizon_months","Horizon, months",1)}${field("discount_rate_annual","Discount rate, annual (0.1 = 10%)")}</section>`;
+  h += `<section><h2>Today's process</h2>
+    ${field("baseline.volume_per_month","Tasks per month",1)}${field("baseline.growth_per_month","Growth per month (0.01 = 1%)")}
+    ${field("baseline.handle_minutes","Handling time, minutes")}${field("baseline.loaded_cost_per_hour","Loaded cost per hour ("+s.currency+")")}
+    ${field("baseline.error_rate","Error rate")}${field("baseline.cost_per_error","Cost per error ("+s.currency+")")}
+    ${field("baseline.fixed_per_month","Fixed cost per month")}${field("baseline.avoidable_fixed_per_month","... of which removed at full adoption")}</section>`;
+  h += `<section><h2>With AI</h2>
+    ${field("adoption.go_live_month","Go-live month",1)}${field("adoption.ramp_months","Months to full adoption",1)}
+    ${field("adoption.coverage","Share of tasks sent to the AI")}${field("adoption.containment","Containment (completed without a handler)")}
+    ${field("adoption.review_minutes","Review minutes per contained task")}${field("adoption.ai_error_rate","Error rate on contained tasks")}
+    ${field("adoption.benefit_realisation","Benefit realisation")}</section>`;
+  h += `<section><h2>Build and run costs (${esc(s.currency)}) <button class="link" data-a="addOne">+ one-off</button></h2>`;
+  (s.costs.one_off||[]).forEach((c,i)=>{ h += `<div class="row" style="grid-template-columns:2fr 1fr 70px 24px">
+      <input data-p="costs.one_off.${i}.name" data-t="text" value="${esc(c.name)}"><input data-p="costs.one_off.${i}.amount" type="number" value="${c.amount}">
+      <input data-p="costs.one_off.${i}.month" type="number" step="1" value="${c.month||1}" title="month"><button class="link" data-a="delOne" data-i="${i}">×</button></div>`; });
+  h += `<div class="tiny" style="margin:8px 0 2px">Recurring per month <button class="link" data-a="addRun">+ add</button></div>`;
+  (s.costs.run_per_month||[]).forEach((c,i)=>{ h += `<div class="row" style="grid-template-columns:2fr 1fr 70px 24px">
+      <input data-p="costs.run_per_month.${i}.name" data-t="text" value="${esc(c.name)}"><input data-p="costs.run_per_month.${i}.amount" type="number" value="${c.amount}">
+      <input data-p="costs.run_per_month.${i}.from_month" type="number" step="1" value="${c.from_month??""}" placeholder="go-live" title="from month"><button class="link" data-a="delRun" data-i="${i}">×</button></div>`; });
+  h += field("costs.maintenance_pct_per_year","Maintenance per year, share of one-off") + `</section>`;
+  h += `<section><h2>AI options <button class="link" data-a="addOpt">+ option</button></h2>`;
+  s.options.forEach((o,oi)=>{
+    h += `<div class="opt"><div class="opt-h"><input data-p="options.${oi}.name" data-t="text" value="${esc(o.name)}" style="font-weight:600">
+      <button class="link" data-a="delOpt" data-i="${oi}">remove</button></div>`;
+    (o.calls||[]).forEach((c,ci)=>{
+      const p=`options.${oi}.calls.${ci}`;
+      let tiers=["standard"], routes=["global"];
+      try { const m = CATALOG[c.provider].models[c.model] || Object.values(CATALOG[c.provider].models).find(x=>(x.aliases||[]).includes(c.model)); tiers=m.tiers; routes=m.routes; } catch(e){}
+      h += `<div class="call"><div class="row" style="grid-template-columns:1fr 24px"><select data-model="${p}">${modelOptions(c.provider+"|"+c.model)}</select><button class="link" data-a="delCall" data-i="${oi}" data-j="${ci}">×</button></div>
+        <div class="grid" style="margin-top:6px">
+          <div><small>Route</small><select data-p="${p}.route" data-t="text">${sel(routes,c.route||"global")}</select></div>
+          <div><small>Tier</small><select data-p="${p}.tier" data-t="text">${sel(tiers,c.tier||"standard")}</select></div>
+          <div><small>Calls / task</small><input data-p="${p}.calls" type="number" value="${c.calls??1}"></div>
+          <div><small>Share of tasks</small><input data-p="${p}.share" type="number" step="0.05" value="${c.share??1}"></div>
+          <div><small>Fresh input</small><input data-p="${p}.input_tokens" type="number" value="${c.input_tokens??0}"></div>
+          <div><small>Cached input</small><input data-p="${p}.cached_tokens" type="number" value="${c.cached_tokens??0}"></div>
+          <div><small>Cache write</small><input data-p="${p}.cache_write_tokens" type="number" value="${c.cache_write_tokens??0}"></div>
+          <div><small>Output</small><input data-p="${p}.output_tokens" type="number" value="${c.output_tokens??0}"></div>
+        </div><small>tokens per call; reasoning tokens count as output</small></div>`;
+    });
+    const pl = o.platform || {};
+    h += `<button class="link" data-a="addCall" data-i="${oi}">+ model call</button>
+      <div class="tiny" style="margin-top:6px">AgentCore and Guardrails per task (Bedrock run costs)</div>
+      <div class="grid call" style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px">
+        <div><small>vCPU-seconds</small><input data-p="options.${oi}.platform.runtime.vcpu_seconds" type="number" value="${pl.runtime?.vcpu_seconds??0}"></div>
+        <div><small>GB-seconds</small><input data-p="options.${oi}.platform.runtime.gb_seconds" type="number" value="${pl.runtime?.gb_seconds??0}"></div>
+        <div><small>Gateway calls</small><input data-p="options.${oi}.platform.gateway_calls" type="number" value="${pl.gateway_calls??0}"></div>
+        <div><small>Guardrail units</small><input data-p="options.${oi}.platform.guardrails.content_filter" type="number" value="${pl.guardrails?.content_filter??0}"></div>
+      </div>
+      ${field(`options.${oi}.platform_fixed_usd_per_month`,"Platform fixed, USD per month")}
+      <label><span>Containment for this option (blank = default)</span><input data-p="options.${oi}.containment" type="number" step="0.01" value="${o.containment??""}"></label></div>`;
+  });
+  h += `</section>`;
+  $("form").innerHTML = h;
+}
+
+function line(series, w=760, h=260){
+  const pl=64, pr=12, pt=12, pb=28; const all=[0]; series.forEach(s=>all.push(...s.v));
+  let lo=Math.min(...all), hi=Math.max(...all); if(hi===lo) hi=lo+1; const n=Math.max(...series.map(s=>s.v.length));
+  const x=i=>pl+(w-pl-pr)*(i/Math.max(n-1,1)), y=v=>pt+(h-pt-pb)*(1-(v-lo)/(hi-lo));
+  let o=`<svg viewBox="0 0 ${w} ${h}" style="width:100%">`;
+  for(let k=0;k<5;k++){ const v=lo+(hi-lo)*k/4; o+=`<line x1="${pl}" x2="${w-pr}" y1="${y(v)}" y2="${y(v)}" stroke="#eef2f7"/><text x="${pl-6}" y="${y(v)+4}" font-size="11" text-anchor="end" fill="#6b7280">${(v/1e6).toFixed(1)}M</text>`; }
+  o+=`<line x1="${pl}" x2="${w-pr}" y1="${y(0)}" y2="${y(0)}" stroke="#94a3b8"/>`;
+  for(let i=0;i<n;i+=Math.max(1,Math.floor(n/12))) o+=`<text x="${x(i)}" y="${h-10}" font-size="11" text-anchor="middle" fill="#6b7280">${i+1}</text>`;
+  series.forEach((s,k)=>{ o+=`<polyline fill="none" stroke="${PALETTE[k%6]}" stroke-width="2.2" points="${s.v.map((v,i)=>x(i)+","+y(v)).join(" ")}"><title>${esc(s.name)}</title></polyline>`; });
+  return o+"</svg>";
+}
+function tornadoSvg(rows, w=760){
+  if(!rows.length) return ""; const base=rows[0].base; const span=Math.max(...rows.map(r=>Math.max(Math.abs(r.low-base),Math.abs(r.high-base))))||1;
+  const bh=20,gap=7,lab=160,h=rows.length*(bh+gap)+26,mid=lab+(w-lab-16)/2,sc=(w-lab-16)/2/span;
+  let o=`<svg viewBox="0 0 ${w} ${h}" style="width:100%"><line x1="${mid}" x2="${mid}" y1="0" y2="${h-22}" stroke="#94a3b8"/>`;
+  rows.forEach((r,i)=>{ const yy=i*(bh+gap)+3;
+    [[r.low,"#dc2626"],[r.high,"#059669"]].forEach(([v,c])=>{ const d=(v-base)*sc; o+=`<rect x="${mid+Math.min(0,d)}" y="${yy}" width="${Math.abs(d)}" height="${bh}" fill="${c}" opacity=".75"><title>${esc(r.driver)}: ${esc(fmt(v))}</title></rect>`; });
+    o+=`<text x="${lab-8}" y="${yy+14}" font-size="12" text-anchor="end">${esc(r.driver)}</text>`; });
+  return o+`<text x="${mid}" y="${h-5}" font-size="11" text-anchor="middle" fill="#6b7280">NPV ${esc(fmt(base))} (red: driver down, green: up)</text></svg>`;
+}
+
+function recompute(){
+  $("error").textContent="";
+  let res;
+  try { res = ROICalc.run(S, CATALOG); } catch(e){ $("error").textContent = e.message; return; }
+  const best = res.reduce((a,b)=>b.kpis.npv>a.kpis.npv?b:a);
+  $("cards").innerHTML = [["Best option", `<span style="font-size:15px">${esc(best.option)}</span>`],["NPV", fmt(best.kpis.npv)],["Payback", month(best.kpis.payback_month)],
+    ["ROI", pct(best.kpis.roi)],["Cost per task, AI vs human", `<span style="font-size:16px">${fmt(best.kpis.ai_cost_per_task)} vs ${fmt(best.kpis.human_cost_per_task)}</span>`]]
+    .map(([k,v])=>`<div class="card"><div class="k">${k}</div><div class="v">${v}</div></div>`).join("");
+  $("table").innerHTML = `<table><tr><th>Option</th><th>NPV</th><th>Payback</th><th>ROI</th><th>IRR</th><th>AI cost / task</th><th>USD / task</th><th>Containment</th></tr>` +
+    res.map(r=>`<tr class="${r===best?"best":""}"><td>${esc(r.option)}</td><td>${fmt(r.kpis.npv)}</td><td>${month(r.kpis.payback_month)}</td><td>${pct(r.kpis.roi)}</td><td>${pct(r.kpis.irr_annual)}</td><td>${fmt(r.kpis.ai_cost_per_task)}</td><td>${r.task.totalUsd.toFixed(5)}</td><td>${pct(r.containment)}</td></tr>`).join("") + `</table>`;
+  $("chart").innerHTML = line(res.map(r=>({name:r.option, v:r.months.map(m=>m.cumulative)})));
+  $("legend").innerHTML = res.map((r,k)=>`<span><i style="background:${PALETTE[k%6]}"></i>${esc(r.option)}</span>`).join("");
+  $("tornadoTitle").textContent = "Sensitivity of NPV: "+best.option+" (each driver ±"+Math.round(((S.sensitivity||{}).pct||0.2)*100)+"%)";
+  $("tornado").innerHTML = tornadoSvg(best.tornado);
+  const rows=[]; S.options.forEach(o=>(o.calls||[]).forEach(c=>{ try{ const r=ROICalc.resolve(CATALOG,c.provider,c.model,c.route,c.tier,S.start_date,S.price_overrides);
+     const m=CATALOG[c.provider].models[r.model]; rows.push(`<tr><td>${esc(r.label)}</td><td>${esc(c.route||"global")}</td><td>${esc(c.tier||"standard")}</td><td>${r.short.input}</td><td>${r.short.cached}</td><td>${r.short.cache_write}</td><td>${r.short.output}</td><td>${esc(m.as_of||CATALOG[c.provider].as_of)}${m.verify?" · check":""}</td></tr>`);}catch(e){} }));
+  $("prices").innerHTML = `<table><tr><th>Model</th><th>Route</th><th>Tier</th><th>$ in</th><th>$ cached</th><th>$ write</th><th>$ out</th><th>As of</th></tr>${[...new Set(rows)].join("")}</table><p class="note">USD per 1M tokens after route and tier. "check": taken from a third-party source; confirm on the provider's price page.</p>`;
+}
+
+function onInput(e){
+  const t=e.target;
+  if (t.dataset.model){ const [prov,mid]=t.value.split("|"); const c=get(t.dataset.model); c.provider=prov; c.model=mid;
+    const m=CATALOG[prov].models[mid]; if(!m.routes.includes(c.route)) c.route=m.routes[0]; if(!m.tiers.includes(c.tier)) c.tier=m.tiers[0]; renderForm(); recompute(); return; }
+  const p=t.dataset.p; if(!p) return;
+  let v = t.dataset.t==="text" ? t.value : (t.value==="" ? null : Number(t.value));
+  set(p, v);
+  if (p==="currency"){ S.currency=String(v).toUpperCase(); if(S.currency==="USD") S.fx_usd=1; renderForm(); }
+  recompute();
+}
+function onClick(e){
+  const a=e.target.dataset.a; if(!a) return; const i=+e.target.dataset.i, j=+e.target.dataset.j;
+  if(a==="addOne") S.costs.one_off.push({name:"New one-off", amount:0, month:1});
+  if(a==="delOne") S.costs.one_off.splice(i,1);
+  if(a==="addRun") S.costs.run_per_month.push({name:"New recurring", amount:0});
+  if(a==="delRun") S.costs.run_per_month.splice(i,1);
+  if(a==="addOpt") S.options.push({name:"Option "+(S.options.length+1), calls:[{provider:"bedrock", model:"openai.gpt-6.1-terra", route:"global", tier:"standard", calls:1, input_tokens:2000, cached_tokens:0, output_tokens:500}]});
+  if(a==="delOpt" && S.options.length>1) S.options.splice(i,1);
+  if(a==="addCall") S.options[i].calls.push({provider:"bedrock", model:"openai.gpt-6-luna", route:"global", tier:"standard", calls:1, input_tokens:1000, cached_tokens:0, output_tokens:100});
+  if(a==="delCall") S.options[i].calls.splice(j,1);
+  renderForm(); recompute();
+}
+function normalise(s){ s.costs=s.costs||{}; s.costs.one_off=s.costs.one_off||[]; s.costs.run_per_month=s.costs.run_per_month||[]; return s; }
+function load(s){ S=normalise(JSON.parse(JSON.stringify(s))); renderForm(); recompute(); }
+
+$("asof").textContent = Object.values(CATALOG).map(c=>(c.label||c.provider)+" "+c.as_of).join(", ");
+$("example").innerHTML = Object.keys(EXAMPLES).map(k=>`<option>${esc(k)}</option>`).join("");
+$("loadEx").onclick = ()=>load(EXAMPLES[$("example").value]);
+$("dl").onclick = ()=>{ const b=new Blob([JSON.stringify(S,null,2)],{type:"application/json"}); const a=document.createElement("a"); a.href=URL.createObjectURL(b); a.download=(S.name||"scenario").replace(/\W+/g,"-").toLowerCase()+".json"; a.click(); };
+$("file").onchange = (e)=>{ const f=e.target.files[0]; if(!f) return; f.text().then(t=>{ try{ load(JSON.parse(t)); }catch(err){ $("error").textContent="Not a scenario JSON: "+err.message; } }); };
+$("form").addEventListener("change", onInput);
+$("form").addEventListener("click", onClick);
+load(EXAMPLES[Object.keys(EXAMPLES)[0]]);
+</script>
+</body>
+</html>

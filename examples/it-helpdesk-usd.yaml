@@ -1,0 +1,41 @@
+# Example: an employee IT helpdesk agent on ServiceNow (US company). Illustrative numbers.
+name: IT helpdesk agent (example, US)
+currency: USD
+start_date: 2026-12-01
+horizon_months: 24
+discount_rate_annual: 0.09
+baseline:
+  volume_per_month: 25000
+  handle_minutes: 9
+  loaded_cost_per_hour: 55
+  error_rate: 0.02
+  cost_per_error: 40
+  fixed_per_month: 30000              # outsourced L1 contract
+  avoidable_fixed_per_month: 20000    # the part that ends at full adoption
+adoption:
+  go_live_month: 3
+  ramp_months: 4
+  coverage: 0.8
+  containment: 0.55
+  review_minutes: 0.5
+  ai_error_rate: 0.01
+  benefit_realisation: 0.9
+costs:
+  one_off:
+    - {name: Build and ServiceNow integration, amount: 180000, month: 1}
+  run_per_month:
+    - {name: Platform team (0.5 FTE), amount: 9000, from_month: 1}
+  maintenance_pct_per_year: 0.2
+options:
+  - name: GPT-6.1 Terra on Bedrock (geo)
+    calls:
+      - {provider: bedrock, model: openai.gpt-6.1-terra, route: geo, calls: 4, input_tokens: 1800, cached_tokens: 4000, cache_write_tokens: 200, output_tokens: 500}
+    platform:
+      runtime: {version: v2, vcpu_seconds: 8, gb_seconds: 160}
+      gateway_calls: 4
+      guardrails: {content_filter: 6}
+  - name: GPT-6.1 Terra, OpenAI API, Flex for after-hours batch
+    calls:
+      - {provider: openai, model: gpt-6.1-terra, tier: standard, share: 0.7, calls: 4, input_tokens: 1800, cached_tokens: 4000, cache_write_tokens: 200, output_tokens: 500}
+      - {provider: openai, model: gpt-6.1-terra, tier: flex, share: 0.3, calls: 4, input_tokens: 1800, cached_tokens: 4000, cache_write_tokens: 200, output_tokens: 500}
+    platform_fixed_usd_per_month: 800

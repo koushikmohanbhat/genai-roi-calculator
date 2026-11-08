@@ -1,0 +1,143 @@
+# Amazon Bedrock list prices (US Regions), USD per 1M tokens, plus AgentCore and Guardrails run costs.
+# Refresh from the Bedrock pricing page and model cards; every change needs a source and date.
+# `verify: true` marks rates taken from third-party write-ups that should be checked against AWS before use.
+provider: bedrock
+label: Amazon Bedrock
+currency: USD
+as_of: "2026-11-08"
+source: https://aws.amazon.com/bedrock/pricing/
+notes:
+  - "Global cross-Region inference is the base rate; in-Region and geographic (e.g. US) cross-Region inference add 10% for OpenAI and Anthropic models."
+  - "OpenAI models on Bedrock are priced at OpenAI's first-party rates with Global cross-Region inference."
+  - "Service tiers: Flex is 50% off Standard; Priority is a 75% premium for most models and 2x for OpenAI models. Support is per model."
+  - "Batch inference is 50% off on-demand for selected models. Prompt caching is not supported with batch."
+routes:
+  global: {multiplier: 1.0, label: "Global cross-Region inference"}
+  geo: {multiplier: 1.1, label: "Geographic cross-Region inference (e.g. US)"}
+  in_region: {multiplier: 1.1, label: "In-Region"}
+tiers:
+  standard: {multiplier: 1.0, label: "Standard"}
+  flex: {multiplier: 0.5, label: "Flex"}
+  priority: {multiplier: 1.75, label: "Priority"}
+  batch: {multiplier: 0.5, label: "Batch inference"}
+long_context: {threshold_tokens: 272000, input: 2.0, cached: 2.0, cache_write: 2.0, output: 1.5}
+models:
+  openai.gpt-6-astra:
+    label: OpenAI GPT-6 Astra (Bedrock)
+    aliases: [global.openai.gpt-6-astra, us.openai.gpt-6-astra, gpt-6-astra]
+    rates: {input: 10.00, cached: 1.00, cache_write: 12.50, output: 50.00}
+    tiers: [standard]
+    routes: [global, geo, in_region]
+    source: https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-openai-gpt-6-astra.html
+    as_of: "2026-11-08"
+    notes: ["Priority and Flex are not supported for Astra (model card)."]
+  openai.gpt-6.1-sol:
+    label: OpenAI GPT-6.1 Sol (Bedrock)
+    aliases: [global.openai.gpt-6.1-sol, us.openai.gpt-6.1-sol, gpt-6.1-sol]
+    rates: {input: 2.00, cached: 0.10, cache_write: 2.50, output: 10.00}
+    tiers: [standard, flex, priority]
+    tier_multipliers: {priority: 2.0}
+    routes: [global, geo, in_region]
+    source: https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-openai-gpt-6-1-sol.html
+    also: https://aws.amazon.com/marketplace/pp/prodview-capzsh5hl5u5y
+    as_of: "2026-11-08"
+  openai.gpt-6.1-terra:
+    label: OpenAI GPT-6.1 Terra (Bedrock)
+    aliases: [global.openai.gpt-6.1-terra, us.openai.gpt-6.1-terra, gpt-6.1-terra]
+    rates: {input: 1.00, cached: 0.05, cache_write: 1.25, output: 5.00}
+    tiers: [standard, flex, priority]
+    tier_multipliers: {priority: 2.0}
+    routes: [global, geo, in_region]
+    source: https://aws.amazon.com/about-aws/whats-new/2026/10/openai-gpt-6-1-terra-on-amazon-bedrock/
+    as_of: "2026-11-08"
+    verify: true
+    notes: ["Global rate equals OpenAI's; in-Region / geographic is $1.10 / $5.50. Flex and Priority support assumed as for Sol: check the model card."]
+  openai.gpt-6-luna:
+    label: OpenAI GPT-6 Luna (Bedrock)
+    aliases: [global.openai.gpt-6-luna, us.openai.gpt-6-luna, gpt-6-luna]
+    rates: {input: 0.10, cached: 0.01, cache_write: 0.125, output: 0.50}
+    tiers: [standard, flex, priority]
+    tier_multipliers: {priority: 2.0}
+    routes: [global, geo, in_region]
+    source: https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-openai-gpt-6-luna.html
+    as_of: "2026-11-08"
+  openai.gpt-oss-120b:
+    label: OpenAI gpt-oss-120b (Bedrock)
+    aliases: [gpt-oss-120b]
+    rates: {input: 0.15, cached: 0.15, cache_write: 0.15, output: 0.60}
+    tiers: [standard, flex, priority, batch]
+    routes: [in_region]
+    route_multipliers: {in_region: 1.0}
+    source: https://aws.amazon.com/bedrock/pricing/
+    as_of: "2026-04-30"
+    verify: true
+    notes: ["No prompt-caching rates listed; cached and cache-write tokens are priced as input."]
+  anthropic.claude-sonnet-5-5:
+    label: Claude Sonnet 5.5 (Bedrock)
+    aliases: [global.anthropic.claude-sonnet-5-5, us.anthropic.claude-sonnet-5-5, claude-sonnet-5.5]
+    rates: {input: 2.00, cached: 0.10, cache_write: 2.50, output: 10.00}
+    tiers: [standard, batch]
+    routes: [global, geo]
+    long_context: null
+    source: https://dev.classmethod.jp/en/articles/bedrock-sonnet-5-5-cache-read-price-cut/
+    as_of: "2026-10-07"
+    verify: true
+    notes: ["Cache write is the 5-minute rate ($4.00 for 1 hour). Cache read cut 50% on 7 Oct 2026."]
+  anthropic.claude-haiku-4-5:
+    label: Claude Haiku 4.5 (Bedrock)
+    aliases: [global.anthropic.claude-haiku-4-5, us.anthropic.claude-haiku-4-5, claude-haiku-4.5]
+    rates: {input: 1.00, cached: 0.10, cache_write: 1.25, output: 5.00}
+    tiers: [standard, batch]
+    routes: [global, geo]
+    long_context: null
+    source: https://aws.amazon.com/bedrock/pricing/
+    as_of: "2026-09-30"
+    verify: true
+  anthropic.claude-opus-4-8:
+    label: Claude Opus 4.8 (Bedrock)
+    aliases: [global.anthropic.claude-opus-4-8, us.anthropic.claude-opus-4-8, claude-opus-4.8]
+    rates: {input: 5.00, cached: 0.50, cache_write: 6.25, output: 25.00}
+    tiers: [standard]
+    routes: [global, geo]
+    long_context: null
+    source: https://aws.amazon.com/bedrock/pricing/
+    as_of: "2026-08-31"
+    verify: true
+  amazon.nova-micro:
+    label: Amazon Nova Micro
+    aliases: [nova-micro]
+    rates: {input: 0.035, cached: 0.00875, cache_write: 0.035, output: 0.14}
+    tiers: [standard, batch]
+    routes: [in_region]
+    route_multipliers: {in_region: 1.0}
+    long_context: null
+    source: https://aws.amazon.com/nova/pricing/
+    as_of: "2026-06-30"
+    notes: ["Cache reads are 75% off input."]
+  amazon.nova-lite:
+    label: Amazon Nova Lite
+    aliases: [nova-lite]
+    rates: {input: 0.06, cached: 0.015, cache_write: 0.06, output: 0.24}
+    tiers: [standard, batch]
+    routes: [in_region]
+    route_multipliers: {in_region: 1.0}
+    long_context: null
+    source: https://aws.amazon.com/nova/pricing/
+    as_of: "2026-06-30"
+  amazon.nova-pro:
+    label: Amazon Nova Pro
+    aliases: [nova-pro]
+    rates: {input: 0.80, cached: 0.20, cache_write: 0.80, output: 3.20}
+    tiers: [standard, batch]
+    routes: [in_region]
+    route_multipliers: {in_region: 1.0}
+    long_context: null
+    source: https://aws.amazon.com/nova/pricing/
+    as_of: "2026-06-30"
+services:
+  # Run costs per unit, USD.
+  agentcore_runtime_v2: {vcpu_hour: 0.1276, gb_hour: 0.0169, source: "https://aws.amazon.com/bedrock/agentcore/pricing/", as_of: "2026-09-18", notes: ["Active CPU only; memory billed per second, reclaimed after 120 s idle."]}
+  agentcore_runtime_v1: {vcpu_hour: 0.0895, gb_hour: 0.00945, source: "https://aws.amazon.com/bedrock/agentcore/pricing/", as_of: "2026-07-04"}
+  agentcore_gateway: {per_1k_invocations: 0.005, source: "https://aws.amazon.com/bedrock/agentcore/pricing/", as_of: "2026-10-01"}
+  agentcore_memory: {per_1k_short_term_events: 0.25, per_1k_long_term_records: 0.75, source: "https://aws.amazon.com/bedrock/agentcore/pricing/", as_of: "2026-08-06", verify: true}
+  guardrails: {content_filter: 0.15, denied_topics: 0.15, sensitive_info: 0.10, grounding: 0.10, unit: "per 1,000 text units (up to 1,000 characters each)", source: "https://aws.amazon.com/about-aws/whats-new/2024/12/amazon-bedrock-guardrails-reduces-pricing-85-percent", as_of: "2026-10-11"}

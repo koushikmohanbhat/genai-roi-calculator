@@ -1,0 +1,46 @@
+# OpenAI API list prices, USD per 1M tokens. Refresh from the pricing page; every change needs a source and date.
+provider: openai
+label: OpenAI API
+currency: USD
+as_of: "2026-11-08"
+source: https://developers.openai.com/api/docs/pricing
+notes:
+  - "Batch and Flex are 50% of Standard; Fast mode (formerly Priority processing, renamed 30 Jul 2026) is 2x."
+  - "Regional processing (data residency) and FedRAMP endpoints add 10% for models released on or after 5 Mar 2026."
+  - "Prompts over 272K input tokens: 2x input and cache rates, 1.5x output, for the whole request (GPT-6.x)."
+  - "Reasoning tokens are billed as output tokens."
+routes:
+  global: {multiplier: 1.0, label: "Standard processing"}
+  regional: {multiplier: 1.1, label: "Regional processing (data residency)"}
+tiers:
+  standard: {multiplier: 1.0, label: "Standard"}
+  batch: {multiplier: 0.5, label: "Batch API (asynchronous, 24h)"}
+  flex: {multiplier: 0.5, label: "Flex (slower, may be unavailable)"}
+  fast: {multiplier: 2.0, label: "Fast mode"}
+long_context: {threshold_tokens: 272000, input: 2.0, cached: 2.0, cache_write: 2.0, output: 1.5}
+models:
+  gpt-6-astra:
+    label: GPT-6 Astra
+    rates: {input: 10.00, cached: 1.00, cache_write: 12.50, output: 50.00}
+    tiers: [standard, batch, flex, fast]
+    routes: [global, regional]
+    as_of: "2026-11-08"
+  gpt-6.1-sol:
+    label: GPT-6.1 Sol
+    rates: {input: 2.00, cached: 0.10, cache_write: 2.50, output: 10.00}
+    tiers: [standard, batch, flex, fast]
+    routes: [global, regional]
+    as_of: "2026-11-08"
+    also: https://openai.com/index/introducing-gpt-6-1-sol/
+  gpt-6.1-terra:
+    label: GPT-6.1 Terra
+    rates: {input: 1.00, cached: 0.05, cache_write: 1.25, output: 5.00}
+    tiers: [standard, batch, flex, fast]
+    routes: [global, regional]
+    as_of: "2026-11-08"
+  gpt-6-luna:
+    label: GPT-6 Luna
+    rates: {input: 0.10, cached: 0.01, cache_write: 0.125, output: 0.50}
+    tiers: [standard, batch, flex, fast]
+    routes: [global, regional]
+    as_of: "2026-11-08"

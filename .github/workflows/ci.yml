@@ -1,0 +1,52 @@
+name: ci
+on:
+  push: {branches: [main]}
+  pull_request: {}
+permissions: {contents: read}
+concurrency: {group: "ci-${{ github.ref }}", cancel-in-progress: true}
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix: {python: ["3.11", "3.12", "3.13"]}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "${{ matrix.python }}", cache: pip}
+      - uses: actions/setup-node@v4
+        with: {node-version: "22"}
+      - name: LibreOffice (workbook parity)
+        if: matrix.python == '3.12'
+        run: sudo apt-get update -q && sudo apt-get install -y -q --no-install-recommends libreoffice-calc
+      - run: pip install -e ".[dev]"
+      - run: ruff check .
+      - run: pytest -q -rs
+      - name: examples run end to end
+        run: |
+          roi prices --check
+          for f in examples/*.yaml; do roi run "$f" --out "out/$(basename "$f" .yaml)"; done
+      - name: dependency audit
+        if: matrix.python == '3.12'
+        run: pip freeze --exclude genai-roi-calculator > /tmp/req.txt && pip-audit -r /tmp/req.txt --no-deps --disable-pip --progress-spinner off
+
+  pages:
+    if: github.event_name == 'push'
+    needs: test
+    runs-on: ubuntu-latest
+    permissions: {contents: read, pages: write, id-token: write}
+    environment: {name: github-pages, url: "${{ steps.deploy.outputs.page_url }}"}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12", cache: pip}
+      - run: pip install .
+      - run: roi web --out site
+      - uses: actions/configure-pages@v5
+        with: {enablement: true}
+        continue-on-error: true
+      - uses: actions/upload-pages-artifact@v3
+        with: {path: site}
+      - id: deploy
+        uses: actions/deploy-pages@v4
+        continue-on-error: true

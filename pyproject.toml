@@ -1,0 +1,60 @@
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[project]
+name = "genai-roi-calculator"
+dynamic = ["version"]
+description = "GenAI ROI and TCO calculator: dated, cited prices for Bedrock and the OpenAI API, a full business case, Excel and web outputs, and 4.1 eval imports."
+readme = "README.md"
+license = "Apache-2.0"
+requires-python = ">=3.11"
+authors = [{ name = "Koushik Mohan" }]
+keywords = ["roi", "tco", "llm", "pricing", "bedrock", "openai", "business-case"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "License :: OSI Approved :: Apache Software License",
+]
+dependencies = [
+  "pydantic>=2.7,<3",
+  "pyyaml>=6",
+  "openpyxl>=3.1",
+  "jinja2>=3.1",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "ruff>=0.6", "pip-audit>=2.7"]
+
+[project.scripts]
+roi = "roi_calc.cli:main"
+
+[project.urls]
+Repository = "https://github.com/koushikmohanbhat/genai-roi-calculator"
+
+[tool.hatch.version]
+path = "src/roi_calc/__init__.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/roi_calc"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"examples" = "roi_calc/examples"
+
+[tool.ruff]
+line-length = 135
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "S"]
+ignore = ["S101"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S", "E501"]
+"src/roi_calc/report.py" = ["E501"]
+"src/roi_calc/xlsx.py" = ["E501"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

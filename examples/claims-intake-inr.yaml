@@ -1,0 +1,66 @@
+# Example: a general insurer in India automating first notice of loss (claims intake) with an agent.
+# All money in INR except fields ending _usd. Volumes, rates and costs are illustrative: replace with the customer's.
+name: Claims intake agent (example insurer, India)
+description: >
+  FNOL intake across web chat and WhatsApp: verify the policy, collect loss details and documents, register the claim,
+  escalate injury and high-value claims to a handler.
+currency: INR
+fx_usd: 94.5                    # 1 USD in INR. Example rate (early Nov 2026): set the rate your finance team uses.
+start_date: 2026-12-01
+horizon_months: 36
+discount_rate_annual: 0.12
+baseline:
+  volume_per_month: 40000       # claims intake contacts handled by people today
+  growth_per_month: 0.01
+  handle_minutes: 14
+  loaded_cost_per_hour: 650     # salary, benefits, seat, supervision
+  error_rate: 0.05              # intake errors that cause rework or leakage
+  cost_per_error: 1500
+  fixed_per_month: 0
+adoption:
+  go_live_month: 4
+  ramp_months: 6
+  coverage: 0.70                # share of contacts routed to the agent at full adoption
+  containment: 0.60             # share of those completed without a handler (from the pilot's eval pass rate)
+  review_minutes: 2             # handler spot-check per contained claim
+  ai_error_rate: 0.02
+  benefit_realisation: 0.80     # some freed time is redeployed, not removed
+costs:
+  one_off:
+    - {name: Build and integration (partner), amount: 6000000, month: 1}
+    - {name: Change management and training, amount: 1500000, month: 3}
+  run_per_month:
+    - {name: "Support, evals and prompt operations", amount: 300000}
+  maintenance_pct_per_year: 0.15
+options:
+  - name: GPT-6.1 Sol on Bedrock (global)
+    description: One capable model for every step, global cross-Region inference.
+    calls:
+      - {provider: bedrock, model: openai.gpt-6.1-sol, route: global, calls: 3, input_tokens: 2500, cached_tokens: 6000, cache_write_tokens: 300, output_tokens: 700}
+    platform: &platform
+      runtime: {version: v2, vcpu_seconds: 12, gb_seconds: 240}
+      gateway_calls: 5
+      memory_events: 8
+      guardrails: {content_filter: 8, sensitive_info: 8}
+  - name: Routed Terra + Luna on Bedrock (global)
+    description: Luna classifies and extracts; Terra runs the conversation.
+    calls:
+      - {provider: bedrock, model: openai.gpt-6-luna, route: global, calls: 2, input_tokens: 900, cached_tokens: 1500, output_tokens: 120}
+      - {provider: bedrock, model: openai.gpt-6.1-terra, route: global, calls: 3, input_tokens: 2500, cached_tokens: 6000, cache_write_tokens: 300, output_tokens: 700}
+    platform: *platform
+  - name: GPT-6.1 Sol, OpenAI API (regional processing)
+    description: OpenAI direct with data residency (10% uplift); no AgentCore (runs on the partner's container platform).
+    calls:
+      - {provider: openai, model: gpt-6.1-sol, route: regional, calls: 3, input_tokens: 2500, cached_tokens: 6000, cache_write_tokens: 300, output_tokens: 700}
+    platform_fixed_usd_per_month: 1500
+  - name: Claude Sonnet 5.5 on Bedrock (geo)
+    description: For comparison; geographic cross-Region inference.
+    calls:
+      - {provider: bedrock, model: anthropic.claude-sonnet-5-5, route: geo, calls: 3, input_tokens: 2500, cached_tokens: 6000, cache_write_tokens: 300, output_tokens: 700}
+    platform: *platform
+sensitivity:
+  pct: 0.2
+  drivers: [volume, handle_minutes, loaded_cost_per_hour, coverage, containment, ai_cost_per_task, one_off, run_costs]
+assumptions:
+  - "Token counts per call are estimates until a 4.1 pilot run is imported (roi import-evals)."
+  - "Containment is the pilot's task-success pass rate; production containment is usually lower."
